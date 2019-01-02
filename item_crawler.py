@@ -1,34 +1,65 @@
 #! /usr/bin/env python
+# coding: utf-8
 
 import argparse
-import re
-import os
+from selenium import webdriver
+from random import uniform
+from bs4 import BeautifulSoup
 
-parser = argparse.ArgumentParser(description="Text File to Csv File")
+parser = argparse.ArgumentParser(description="Crawling Item Name")
 
-# I&O file
-parser.add_argument('--input_file', dest="input_file", type=str, default="./data/data_statistic.txt", help="Data File")
+parser.add_argument('--url', dest="url", type=str, default=None, help="URL")
+parser.add_argument('--search', dest="search", type=str, default=None, help="Something to Search")
 
 args = parser.parse_args()
 
 
-def txt_to_csv(input_file):
-    dir_path = os.path.dirname(os.path.realpath(input_file))
-    output_path = os.path.join(dir_path, 'data_statistic.csv')
+def crawling_items(url, search):
+    #browser = randint(0, 2)
 
-    data_list = list(open(input_file, 'r', encoding="utf-8").readlines())
+    #if browser == 0:
+    #    driver = webdriver.Chrome("C:/webdriver/chromedriver.exe")
+    #elif browser == 1:
+    #    driver = webdriver.Edge("C:/webdriver/MicrosoftWebDriver.exe")
+    #elif browser == 2:
+    #    driver = webdriver.Firefox("C:\\webdriver\\geckodriver.exe")
+    #else:
+    #    exit()
 
-    f = open(output_path, 'w', encoding="utf-8")
+    driver = webdriver.Chrome("C:/webdriver/chromedriver.exe")
 
-    for line in data_list:
-        line = line.split('\t')
-        for word in line:
-            f.write(word.strip() + ", ")
-        f.write(+ "\n")
+    driver.implicitly_wait(uniform(2.5, 4.0))
+
+    driver.get(url)
+
+    driver.find_element_by_id("searchinput").click()
+    driver.find_element_by_id("searchinput").send_keys(search)
+    driver.find_element_by_class_name("search_bar2").click()
+
+    driver.implicitly_wait(uniform(2.5, 4.0))
+
+    links = driver.find_elements_by_css_selector("table > tbody > tr > td > a.link")
+
+    for link in range(len(links)):
+        #link.click()
+        driver.find_elements_by_css_selector("table > tbody > tr > td > a.link")[link].click()
+        driver.implicitly_wait(uniform(2.5, 4.0))
+        codes = driver.find_elements_by_css_selector("td > a > font")
+        for code in codes:
+            code.click()
+            driver.implicitly_wait(uniform(2.5, 4.0))
+            html = driver.page_source
+            soup = BeautifulSoup(html, "html.parser")
+            items = soup.select("div#tab1 > table > tbody > tr > td")
+            for item in items:
+                print(item.text)
+        driver.find_element_by_class_name("search_bar2").click()
+        driver.implicitly_wait(uniform(2.5, 4.0))
+    print(links)
 
 
 def main():
-    txt_to_csv(args.input_file)
+    crawling_items(args.url, args.search)
 
 
 if __name__ == '__main__':
