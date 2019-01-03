@@ -2,64 +2,49 @@
 # coding: utf-8
 
 import argparse
-from selenium import webdriver
+import requests
 from random import uniform
+from time import sleep
 from bs4 import BeautifulSoup
 
-parser = argparse.ArgumentParser(description="Crawling Item Name")
+parser = argparse.ArgumentParser(description="Crawling Item Name and Code")
 
-parser.add_argument('--url', dest="url", type=str, default=None, help="URL")
-parser.add_argument('--search', dest="search", type=str, default=None, help="Something to Search")
+parser.add_argument('--url', dest="url", type=str, default=None,
+                    help="URL, If You Want to Use Dictionary, Use '???' at Parameter Place")
+parser.add_argument('--dict_file', dest="dict_file", type=str, default=None,
+                    help="Dictionary File Path Used on Search")
+parser.add_argument('--output_file', dest="output_file", type=str, default="./data/data.txt",
+                    help="Output Data File Path")
 
 args = parser.parse_args()
 
 
-def crawling_items(url, search):
-    #browser = randint(0, 2)
+def crawling_items(url, word, output_file):
+    url = url.replace("???", word)
 
-    #if browser == 0:
-    #    driver = webdriver.Chrome("C:/webdriver/chromedriver.exe")
-    #elif browser == 1:
-    #    driver = webdriver.Edge("C:/webdriver/MicrosoftWebDriver.exe")
-    #elif browser == 2:
-    #    driver = webdriver.Firefox("C:\\webdriver\\geckodriver.exe")
-    #else:
-    #    exit()
+    req = requests.get(url)
 
-    driver = webdriver.Chrome("C:/webdriver/chromedriver.exe")
+    dom = BeautifulSoup(req.content, "html.parser")
 
-    driver.implicitly_wait(uniform(2.5, 4.0))
+    items = dom.select("div.results-table > div.result-section > table.result-table > tbody > tr > td.desc")
+    codes = dom.select("div.results-table > div.result-section > table.result-table > tbody > tr > td > a")
 
-    driver.get(url)
+    f = open(output_file, 'a', encoding="utf-8")
 
-    driver.find_element_by_id("searchinput").click()
-    driver.find_element_by_id("searchinput").send_keys(search)
-    driver.find_element_by_class_name("search_bar2").click()
+    for data in zip(items, codes):
+        f.write(data[0].text + "\t" + data[1].text[:6] + "\n")
 
-    driver.implicitly_wait(uniform(2.5, 4.0))
+    print(word)
 
-    links = driver.find_elements_by_css_selector("table > tbody > tr > td > a.link")
+    f.close()
 
-    for link in range(len(links)):
-        #link.click()
-        driver.find_elements_by_css_selector("table > tbody > tr > td > a.link")[link].click()
-        driver.implicitly_wait(uniform(2.5, 4.0))
-        codes = driver.find_elements_by_css_selector("td > a > font")
-        for code in codes:
-            code.click()
-            driver.implicitly_wait(uniform(2.5, 4.0))
-            html = driver.page_source
-            soup = BeautifulSoup(html, "html.parser")
-            items = soup.select("div#tab1 > table > tbody > tr > td")
-            for item in items:
-                print(item.text)
-        driver.find_element_by_class_name("search_bar2").click()
-        driver.implicitly_wait(uniform(2.5, 4.0))
-    print(links)
+    sleep(uniform(1.0, 10))
 
 
 def main():
-    crawling_items(args.url, args.search)
+    word_list = list(open(args.dict_file, 'r', encoding="utf-8").readlines())
+    for word in word_list:
+        crawling_items(args.url, word.strip(), args.output_file)
 
 
 if __name__ == '__main__':
