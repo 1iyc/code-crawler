@@ -26,4 +26,3 @@ for i in range(922, 10000):
     f.close()
 
     sleep(uniform(3.0, 10.0))
-
