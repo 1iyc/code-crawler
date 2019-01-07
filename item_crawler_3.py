@@ -26,7 +26,11 @@ def crawling_items(url, word, output_file, start_page=1):
     url = url.replace("???", word)
     url_page = url.replace("@@@", str(start_page))
 
-    req = requests.get(url_page)
+    try:
+        req = requests.get(url_page)
+    except requests.exceptions.ConnectionError:
+        crawling_items(url, word, output_file, start_page)
+        return 0
 
     dom = BeautifulSoup(req.content, "html.parser")
 
