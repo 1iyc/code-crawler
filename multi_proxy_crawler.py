@@ -41,7 +41,13 @@ def crawling_items(uri, proxy_uri, word, output_file, start_page=1, last_page=0)
                 "https": row.select("td")[0].text+":" + row.select("td")[1].text,
             })
 
-        proxy = proxies[randint(0, len(proxies) - 1)]
+        try:
+            proxy = proxies[randint(0, len(proxies) - 1)]
+        except Exception as e:
+            print(proxy)
+            print(len(proxy))
+            print(e)
+            crawling_items(uri, args.proxy_uri, word, output_file, start_page, last_page)
         print("[ {} ]  PROXY IP\t{}".format(word, proxy['http']))
     else:
         proxy = proxy_uri
@@ -50,10 +56,22 @@ def crawling_items(uri, proxy_uri, word, output_file, start_page=1, last_page=0)
     uri_page = uri.replace("@@@", str(start_page))
 
     try:
-        req = requests.get(uri_page, proxies=proxy)
+        req = requests.get(uri_page, proxies=proxy, timeout=5)
     except requests.exceptions.ProxyError:
         print("[ {} ]  PROXY ERROR!!!".format(word))
-        crawling_items(uri, proxy_uri, word, output_file, start_page)
+        crawling_items(uri, args.proxy_uri, word, output_file, start_page, last_page)
+        return 0
+    except requests.exceptions.Timeout:
+        print("[ {} ]  TIMEOUT ERROR!!!".format(word))
+        crawling_items(uri, args.proxy_uri, word, output_file, start_page, last_page)
+        return 0
+    except (ConnectionRefusedError, requests.exceptions.ConnectionError):
+        print("[ {} ]  CONNECTION ERROR!!!".format(word))
+        crawling_items(uri, args.proxy_uri, word, output_file, start_page, last_page)
+        return 0
+    except Exception as e:
+        print("[ {} ]  UNEXPECTED ERROR!!! {}".format(word, e))
+        crawling_items(uri, args.proxy_uri, word, output_file, start_page, last_page)
         return 0
 
     dom = BeautifulSoup(req.content, "html.parser")
@@ -64,12 +82,15 @@ def crawling_items(uri, proxy_uri, word, output_file, start_page=1, last_page=0)
         pages = dom.select("div#pages > div#pages > a")
         try:
             last_page = int(pages[-2].text)
-            print("[ {} ]  TOTAL PAGE\t{}".format(word, last_page))
+            print("[ {} ]  TOTAL PAGE\t{}".format(word, last_page-1))
+            if last_page > 21:
+                last_page = 21
         except IndexError:
             print("[ {} ]  NOT EXISTED".format(word))
             return 1
         except ValueError:
             last_page = 2
+            print("[ {} ]  TOTAL PAGE\t{}".format(word, last_page-1))
 
     f = open(output_file, 'a', encoding="utf-8")
 
@@ -81,7 +102,7 @@ def crawling_items(uri, proxy_uri, word, output_file, start_page=1, last_page=0)
 
     f.close()
 
-    print("\r[ {} ]  PAGE {}/{} FINISHED".format(word, start_page, last_page), end='')
+    print("[ {} ]  {}/{}".format(word, start_page, last_page-1))
 
     start_page += 1
 
@@ -95,7 +116,7 @@ def crawling_items(uri, proxy_uri, word, output_file, start_page=1, last_page=0)
 def main():
     word_list = list(open(args.dict_file, 'r', encoding="utf-8").readlines())
     for word in word_list:
-        print("\n[ {} ]  STARTED!!!".format(word.strip()))
+        print("[ {} ]  STARTED!!!".format(word.strip()))
         crawling_items(args.uri, args.proxy_uri, word.strip(), args.output_file, args.start_page)
 
 
