@@ -29,7 +29,11 @@ parser.add_argument('--finished_file', dest="finished_file", type=str, default="
 args = parser.parse_args()
 
 
-async def get_proxy(word):
+async def get_proxy(word, count=11):
+    count = count - 1
+    if not count:
+        raise RecursionError
+
     try:
         async with aiohttp.request("GET", args.proxy_uri, headers={'User-Agent:': UserAgent().random},
                                    allow_redirects=False) as res:
@@ -40,22 +44,28 @@ async def get_proxy(word):
             return proxy_ip
     except Exception as e:
         print("!!! [{}] ERROR (GET PROXY) err: {}".format(word, e))
-        return await get_proxy(word)
+        return await get_proxy(word, count)
 
 
-async def re_request(uri, word):
+async def re_request(uri, word, count=11):
     print("[{}] RE REQUESTED".format(word))
+    count = count - 1
+    if not count:
+        raise RecursionError
+
     try:
         async with aiohttp.request("GET", uri, headers={'User-Agent:': UserAgent().random},
                                    proxy=await get_proxy(word), allow_redirects=False) as res:
             return BeautifulSoup(await res.text(), "html.parser")
     except (aiohttp.client_exceptions.ClientProxyConnectionError, aiohttp.client_exceptions.ClientOSError):
         # print("!!! [{}] RE REQUEST ERROR (CANNOT CONNECT to PROXY HOST)".format(word))
-        return await re_request(uri, word)
+        return await re_request(uri, word, count)
+    except RecursionError:
+        print("!!! [{}] RECURSION ERROR (RE REQUEST)".format(word))
     except Exception as e:
         print("!!! [{}] UNEXPECTED ERROR (RE REQUEST) err: {}".format(word, e))
         print(traceback.format_exc())
-        return await re_request(uri, word)
+        return await re_request(uri, word, count)
 
 
 async def get_last_page(soup, word):
@@ -115,21 +125,26 @@ async def multi_crawling(semaphore, word):
     uri_word = args.uri.replace("???", word)
     uri_page = uri_word.replace("@@@", '1')
 
-    soup = await request_soup(uri_page, word)
+    try:
+        soup = await request_soup(uri_page, word)
 
-    last_page = await get_last_page(soup, word)
-    print("[{}] TOTAL PAGE NUM: {}".format(word, last_page))
+        last_page = await get_last_page(soup, word)
+        print("[{}] TOTAL PAGE NUM: {}".format(word, last_page))
 
-    if last_page > 0:
-        await write_items(soup)
-        await page_crawling(uri_word, word, last_page)
+        if last_page > 0:
+            await write_items(soup)
+            await page_crawling(uri_word, word, last_page)
 
-    with open(args.finished_file, "a", encoding="utf-8") as f:
-        f.write(word + "\n")
+        with open(args.finished_file, "a", encoding="utf-8") as f:
+            f.write(word + "\n")
 
-    await asyncio.sleep(0.05)
-    print("[{}] RELEASED".format(word))
-    semaphore.release()
+        await asyncio.sleep(0.05)
+        print("[{}] RELEASED".format(word))
+        semaphore.release()
+    except RecursionError:
+        print("[{}] RECURSION ERROR (MULTI CRAWLING)".format(word))
+        await asyncio.sleep(0.05)
+        semaphore.release()
 
 
 async def main(loop):
