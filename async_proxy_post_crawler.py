@@ -57,93 +57,80 @@ async def get_proxy(word, count=11):
         return await get_proxy(word, count)
 
 
-async def re_request(uri, word, count=11):
+async def re_request(uri, word, post_data, count=11):
     print("[{}] RE REQUESTED".format(word))
     count = count - 1
     if not count:
         raise RecursionError
 
     try:
-        async with aiohttp.request("GET", uri, headers={'User-Agent:': UserAgent().random},
+        async with aiohttp.request("POST", uri, headers={'User-Agent:': UserAgent().random}, data=post_data,
                                    proxy=await get_proxy(word), allow_redirects=False) as res:
-            return BeautifulSoup(await res.text(), "html.parser")
+            print(await res.json(content_type="text/html"))
+            return await res.json(content_type="text/html")
     except (aiohttp.client_exceptions.ClientProxyConnectionError, aiohttp.client_exceptions.ClientOSError):
         # print("!!! [{}] RE REQUEST ERROR (CANNOT CONNECT to PROXY HOST)".format(word))
-        return await re_request(uri, word, count)
+        return await re_request(uri, word, post_data, count)
     except RecursionError:
         print("!!! [{}] RECURSION ERROR (RE REQUEST)".format(word))
     except Exception as e:
         print("!!! [{}] UNEXPECTED ERROR (RE REQUEST) err: {}".format(word, e))
         print(traceback.format_exc())
-        return await re_request(uri, word, count)
+        return await re_request(uri, word, post_data, count)
 
 
-async def get_last_page(soup, word):
-    try:
-        text = soup.select("div#pages > div#pages > a")[-2].text
-        if text == "Prev":
-            return 1
-        else:
-            return int(text) if int(text) < 21 else 20
-    except (AttributeError, IndexError):
-        # print("[{}] NOTHING SEARCHED".format(word))
-        return 0
-    except Exception as e:
-        print("!!! [{}] UNEXPECTED ERROR (GET PAGE NUM) err: {}".format(word, e))
-        print(traceback.format_exc())
-
-
-async def write_items(soup):
-    codes = soup.select("div.display_table > div.display_row1 > p > span")
+async def write_items(post_data):
     with open(args.output_file, "a", encoding="utf-8") as f:
-        for code in codes:
-            items = soup.select("div.display_table > div.display_row2 > p#" + code.text + " > span > a")
-            for item in items:
-                f.write(item.text + "\t" + code.text + "\n")
+        for data in post_data['uls_dmst']['itemList']:
+            f.write(data['CMDT_NM_TIT'] + "\t" + data['DTRM_HS_SGN'] + "\n")
 
 
-async def request_soup(uri, word):
+async def request_post(uri, word, post_data):
     try:
-        async with aiohttp.request("GET", uri, headers={'User-Agent:': UserAgent().random},
-                                   proxy=await get_proxy(word), allow_redirects=False) as res:
-            return BeautifulSoup(await res.text(), "html.parser")
+        async with aiohttp.request("POST", uri, headers={'User-Agent:': UserAgent().random},
+                                   proxy=await get_proxy(word), data=post_data,
+                                   allow_redirects=False) as res:
+            print(await res.json(content_type="text/html"))
+            return await res.json(content_type="text/html")
     except (aiohttp.client_exceptions.ClientProxyConnectionError, aiohttp.client_exceptions.ClientOSError,
             aiohttp.client_exceptions.ServerDisconnectedError):
         # print("!!! [{}] ERROR (CANNOT CONNECT to PROXY HOST)".format(word))
-        return await re_request(uri, word)
+        return await re_request(uri, word, post_data)
     except Exception as e:
         print("!!! [{}] UNEXPECTED ERROR (GET REQUEST VIA PROXY) err: {}".format(word, e))
         print(traceback.format_exc())
-        return await re_request(uri, word)
+        return await re_request(uri, word, post_data)
 
 
-async def page_crawling(uri, word, last_page):
+async def page_crawling(uri, word, post_data, last_page):
     if last_page > 1:
         print("[{} - {}] STARTED".format(word, last_page))
-        uri_page = uri.replace("@@@", str(last_page))
+        post_data[args.page_prop] = last_page
 
-        soup = await request_soup(uri_page, word)
-        await write_items(soup)
+        res_data = await request_post(args.uri, word, post_data)
+        await write_items(res_data)
         await page_crawling(uri, word, last_page-1)
     else:
         return 0
 
 
-async def multi_crawling(semaphore, word):
+async def multi_crawling(semaphore, word, post_data):
     await semaphore.acquire()
-    print("[{}] STARTED".format(word))
-    uri_word = args.uri.replace("???", word)
-    uri_page = uri_word.replace("@@@", '1')
+    print("[{}] STARTING".format(word))
+
+    for word_prop in [x.strip() for x in args.item_prop.split(',')]:
+        post_data[word_prop] = word
+    post_data[args.page_prop] = 1
 
     try:
-        soup = await request_soup(uri_page, word)
+        res_data = await request_post(args.uri, word, post_data)
 
-        last_page = await get_last_page(soup, word)
+        last_page = res_data["paginationInfo"]["lastPageNo"]
         print("[{}] TOTAL PAGE NUM: {}".format(word, last_page))
 
         if last_page > 0:
-            await write_items(soup)
-            await page_crawling(uri_word, word, last_page)
+            await write_items(res_data)
+            await page_crawling(args.uri, word, post_data, last_page)
 
         with open(args.finished_file, "a", encoding="utf-8") as f:
             f.write(word + "\n")
@@ -161,7 +148,7 @@ async def main(loop):
     word_list = list(open(args.dict_file, 'r', encoding="utf-8").readlines())
     post_data = ast.literal_eval(open(args.post_data, 'r', encoding="utf-8").readline().strip())
     crawler_semaphore = asyncio.Semaphore(value=1)
-    await asyncio.wait([multi_crawling(crawler_semaphore, word.strip()) for word in word_list])
+    await asyncio.wait([multi_crawling(crawler_semaphore, word.strip(), post_data) for word in word_list])
 
 
 if __name__ == '__main__':
