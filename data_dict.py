@@ -39,7 +39,7 @@ def make_dict(input_file, output_file, na_file, raw=True):
             if len(data):
                 for i in range(len(data) - 1):
                     dict_list.append(data[i])
-                    dict_list.append(data[i] + "+" + data[i+1])
+                    dict_list.append(data[i] + " " + data[i+1])
                 dict_list.append(data[len(data) - 1])
 
             cnt += 1
