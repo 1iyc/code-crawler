@@ -5,43 +5,83 @@ import argparse
 import requests
 from random import uniform
 from time import sleep
-from bs4 import BeautifulSoup
-
-parser = argparse.ArgumentParser(description="Crawling Item Name and Code")
-
-parser.add_argument('--url', dest="url", type=str, default=None,
-                    help="URL, If You Want to Use Dictionary, Use '???' at Parameter Place")
-parser.add_argument('--dict_file', dest="dict_file", type=str, default=None,
-                    help="Dictionary File Path Used on Search")
-parser.add_argument('--output_file', dest="output_file", type=str, default="./data/data.txt",
-                    help="Output Data File Path")
-
-args = parser.parse_args()
+import csv
+import re
 
 
-def crawling_items(url, word, output_file):
-    url = url.replace("???", word)
+def write_data(output_path, code, item, date, parse_item=False):
+    with open(output_path, 'w', encoding="utf-8") as f:
+        wr = csv.writer(f)
+        for i, v in enumerate(item):
+            if not parse_item:
+                wr.writerow([code[i], v])
+            else:
+                v_sp = v.split(';')
+                for v_item in v_sp:
+                    wr.writerow([re.sub('\D', '', code[i]), v_item.strip()])
 
-    req = requests.get(url)
 
-    dom = BeautifulSoup(req.content, "html.parser")
+def request_data(uri, data, with_date=False):
+    print('#'*10 + " Request Data " + '#'*10)
+    code = []
+    items = []
+    if with_date:
+        date = []
 
-    items = dom.select("div.results-table > div.result-section > table.result-table > tbody > tr > td.desc")
-    codes = dom.select("div.results-table > div.result-section > table.result-table > tbody > tr > td > a")
+    res = requests.post(uri, data=data).json()
 
-    f = open(output_file, 'a', encoding="utf-8")
+    last_page = res['paginationInfo']['lastPageNo']
+    print("total page number:\t" + str(last_page))
 
-    for data in zip(items, codes):
-        f.write(data[0].text + "\t" + data[1].text[:6] + "\n")
+    item_list = res['uls_dmst']['itemList']
 
-    print(word)
+    print("page...\t1")
 
-    f.close()
+    for i in range(len(item_list)):
+        code.append(str(item_list[i]['DTRM_HS_SGN']).strip())
+        items.append(str(item_list[i]['CMDT_NM']).strip())
+        if with_date:
+            date.append(str(item_list[i]['ENFR_DT']).strip())
 
-    sleep(uniform(1.0, 10))
+    sleep_sec = uniform(1.2, 3.4)
+    print("sleep..\t" + str(round(sleep_sec, 2)) + "s")
+    sleep(sleep_sec)
+
+    for i in range(2, int(last_page) + 1):
+        data['pageIndex'] = str(i)
+        print("page...\t" + str(i))
+        res = requests.post(uri, data=data)
+        item_list = res.json()['uls_dmst']['itemList']
+        for j in range(len(item_list)):
+            code.append(str(item_list[j]['DTRM_HS_SGN']).strip())
+            items.append(str(item_list[j]['CMDT_NM']).strip())
+            if with_date:
+                date.append(str(item_list[j]['ENFR_DT']).strip())
+        sleep_sec = uniform(1.2, 3.4)
+        print("sleep..\t" + str(round(sleep_sec, 2)) + "s")
+        sleep(sleep_sec)
+
+    if with_date:
+        return code, items, date
+    else:
+        return code, items, None
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Crawling Item Name and Code")
+
+    # options
+    parser.add_argument('--with_date', dest="with_date", type=bool, default=False, nargs='?', const=True,
+                        help="Request data with date")
+    parser.add_argument('--parse_item', dest="parse_item", type=bool, default=False, nargs='?', const=True,
+                        help="Parse data")
+
+    parser.add_argument('--uri', dest="uri", type=str, default=None,
+                        help="URI")
+    parser.add_argument('--output_path', dest="output_path", type=str, default="./data/data.txt",
+                        help="Output Data File Path")
+    flags, unused_flags = parser.parse_known_args()
+
     data = {'pageIndex': '1',
             'pageUnit': '100',
             'orderColumns': 'ENFR_DT+desc',
@@ -104,26 +144,10 @@ def main():
         'Cookie': 'WMONID=s3eCz2rGLbq; JSESSIONID=0001fEVgPyCVIQfXpD5o_ZCCW29ynIHUDvorW1vPWgXBU4SXjvuVYVvZ2ZwmCIZ3DG0e4vdJCW0-tZK2QKeH7LnRo15E5qRXm0iGIPvCgxbSN97FQtrZs1ip_ZafM7q_jHbS:eul21',
         'Pragma': 'no-cache',
         'Cache-Control': 'no-cache'}
-    res = requests.post(args.url, data=data)
-    # print(res.json())
-    last_page = res.json()['paginationInfo']['lastPageNo']
-    item_list = res.json()['uls_dmst']['itemList']
 
-    f = open("data_0704.txt", 'w', encoding="utf-8")
-    g = open("data_date_0704.txt", 'w', encoding="utf-8")
+    code, item, date = request_data(flags.uri, data, flags.with_date)
 
-    for i in range(len(item_list)):
-        f.write(item_list[i]['DTRM_HS_SGN'] + '\t' + item_list[i]['CMDT_NM'] + '\n')
-        g.write(item_list[i]['ENFR_DT'] + item_list[i]['DTRM_HS_SGN'] + '\t' + item_list[i]['CMDT_NM'] + '\n')
-
-    for i in range(2, int(last_page) + 1):
-        data['pageIndex'] = str(i)
-        res = requests.post(url, data=data)
-        item_list = res.json()['uls_dmst']['itemList']
-        for i in range(len(item_list)):
-            f.write(item_list[i]['DTRM_HS_SGN'] + '\t' + item_list[i]['CMDT_NM'] + '\n')
-            g.write(item_list[i]['ENFR_DT'] + '\t' + item_list[i]['DTRM_HS_SGN'] + '\t' + item_list[i]['CMDT_NM'] + '\n')
-        sleep(uniform(1.2, 3.4))
+    write_data(flags.output_path, code, item, date, flags.parse_item)
 
 
 if __name__ == '__main__':
