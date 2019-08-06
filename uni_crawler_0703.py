@@ -80,6 +80,7 @@ def main():
                         help="URI")
     parser.add_argument('--output_path', dest="output_path", type=str, default="./data/data.txt",
                         help="Output Data File Path")
+
     flags, unused_flags = parser.parse_known_args()
 
     data = {'pageIndex': '1',
