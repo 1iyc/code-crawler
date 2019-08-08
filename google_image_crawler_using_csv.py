@@ -12,31 +12,42 @@ from bs4 import BeautifulSoup
 from urllib.request import urlopen
 
 
-def crawl_google_image(keyword):
+def crawl_google_image(keywords, image_dir, ban_list):
     uri = "https://www.google.co.kr/search?"
 
-    params = {
-        "q": keyword,
-        "tbm": "isch"
-    }
+    for keyword in keywords:
+        params = {
+            "q": keyword,
+            "tbm": "isch"
+        }
 
-    html_object = req.get(uri, params)
+        html_object = req.get(uri, params)
 
-    if html_object.status_code == 200:
-        bs_object = BeautifulSoup(html_object.text, "html.parser")
-        img_data = bs_object.find_all("img")
+        if html_object.status_code == 200:
+            soup = BeautifulSoup(html_object.text, "html.parser")
+            img_data = soup.findAll("img")
 
-        for i in enumerate(img_data[1:]):
-            # 딕셔너리를 순서대로 넣어줌
-            t = urlopen(i[1].attrs['src']).read()
+            count = 1
+            for i in img_data[1:]:
+                if ban_list:
+                    if any(word in i.previous_element.attrs['href'] for word in ban_list):
+                        continue
 
-            filename = "b" + str(i[0] + 1) + '.png'
+                t = urlopen(i.attrs['src']).read()
 
-            with open(filename, "wb") as f:
-                f.write(t)
+                filename = os.path.join(image_dir, keyword) + '_' + str(count) + '.png'
+
+                with open(filename, "wb") as f:
+                    f.write(t)
+                    count += 1
+
+                if count == 6:
+                    continue
+
+        sleep(uniform(0.3, 1.3))
 
 
-def image_crawl(list_path, image_dir):
+def image_crawl(list_path, image_dir, ban_list):
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
 
@@ -46,9 +57,12 @@ def image_crawl(list_path, image_dir):
     for line in rdr:
         code = line[0]
         item = re.sub('[/]', '_', line[1])
-        if not os.path.exists(os.path.join(image_dir, code, item)):
-            os.makedirs(os.path.join(image_dir, code, item))
-            crawl_google_image(line[2])
+        keywords = line[2:]
+        item_dir = os.path.join(image_dir, code, item)
+        if not os.path.exists(item_dir):
+            os.makedirs(item_dir)
+            crawl_google_image(keywords, item_dir, ban_list)
+            print(rdr.line_num, item, "Finished")
 
 
 def make_search_list(csv_path, output_path, skip_column):
@@ -85,6 +99,8 @@ def make_search_list(csv_path, output_path, skip_column):
     f.close()
     g.close()
 
+    print("#### CSV Parsing End ####")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Crawling Google Image using CSV File")
@@ -102,12 +118,25 @@ def main():
     parser.add_argument('--image_dir', dest="image_dir", type=str, default="./data/image",
                         help="Output Image Directory Path")
 
+    parser.add_argument('--ban_list_path', dest="ban_list_path", type=str, default="./data/ban_list.txt",
+                        help="Ban List Path")
+
     flags, unused_flags = parser.parse_known_args()
 
     if not os.path.isfile(flags.output_path):
         make_search_list(flags.csv_path, flags.output_path, flags.skip_column)
 
-    image_crawl(flags.output_path, flags.image_dir)
+    ban_list = None
+
+    if os.path.isfile(flags.ban_list_path):
+        ban_list = []
+        with open(flags.ban_list_path, 'r', encoding='utf-8') as f:
+            for word in f:
+                ban_list.append(word.strip())
+        if len(ban_list) == 0:
+            ban_list = None
+
+    image_crawl(flags.output_path, flags.image_dir, ban_list)
 
 
 if __name__ == '__main__':
