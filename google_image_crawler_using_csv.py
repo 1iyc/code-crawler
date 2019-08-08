@@ -70,12 +70,16 @@ def make_search_list(csv_path, output_path, skip_column):
         parsed_keyword = ' '.join([w for w in parsed_keyword.split() if len(w) > 1])
 
         splited_keyword = parsed_keyword.split()
+
+        w_row = [code, real_keyword]
+
         if len(splited_keyword) > 4:
             for i in range(4, len(splited_keyword) + 1):
                 segments_keyword = ' '.join(splited_keyword[:i])
-                wr.writerow([code, real_keyword, segments_keyword])
+                w_row.append(segments_keyword)
         else:
-            wr.writerow([code, real_keyword, parsed_keyword])
+            w_row.append(parsed_keyword)
+        wr.writerow(w_row)
         # if real_keyword != parsed_keyword:
         #     print(code, '\t\t', real_keyword, '\t\t', parsed_keyword)
     f.close()
