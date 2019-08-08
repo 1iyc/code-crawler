@@ -35,14 +35,17 @@ def crawl_google_image(keywords, image_dir, ban_list):
 
                 t = urlopen(i.attrs['src']).read()
 
-                filename = os.path.join(image_dir, keyword) + '_' + str(count) + '.png'
+                if t.startswith(b'\xff\xd8\xff\xe0'):
+                    filename = os.path.join(image_dir, keyword) + '_' + str(count) + '.jpg'
+                else:
+                    filename = os.path.join(image_dir, keyword) + '_' + str(count) + '.png'
 
                 with open(filename, "wb") as f:
                     f.write(t)
                     count += 1
 
                 if count == 6:
-                    continue
+                    break
 
         sleep(uniform(0.3, 1.3))
 
