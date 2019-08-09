@@ -47,7 +47,7 @@ def crawl_google_image(keywords, image_dir, ban_list):
                 if count == 6:
                     break
 
-        sleep(uniform(0.3, 1.3))
+        sleep(uniform(1.3, 5.3))
 
 
 def image_crawl(list_path, image_dir, ban_list):
@@ -64,8 +64,12 @@ def image_crawl(list_path, image_dir, ban_list):
         item_dir = os.path.join(image_dir, code, item)
         if not os.path.exists(item_dir):
             os.makedirs(item_dir)
-            crawl_google_image(keywords, item_dir, ban_list)
-            print(rdr.line_num, item, "Finished")
+            try:
+                crawl_google_image(keywords, item_dir, ban_list)
+                print(rdr.line_num, item, "Finished")
+            except:
+                with open('./data/error.log', 'a') as f:
+                    f.write(str(rdr.line_num) + '\t' + item + '\n')
 
 
 def make_search_list(csv_path, output_path, skip_column):
