@@ -34,6 +34,7 @@ def crawl_google_image(keywords, image_dir, ban_list):
                         continue
 
                 t = urlopen(i.attrs['src']).read()
+                print(i.attrs['src'])
 
                 if t.startswith(b'\xff\xd8\xff\xe0'):
                     filename = os.path.join(image_dir, keyword) + '_' + str(count) + '.jpg'
